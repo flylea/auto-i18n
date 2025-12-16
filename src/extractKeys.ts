@@ -1,13 +1,12 @@
 import { readFile } from "fs/promises";
 import { parse } from "@babel/parser";
-import traverse from "@babel/traverse";
-import config from "../i18n.config";
+import traverseModule from "@babel/traverse";
 import { parse as parseVue } from "@vue/compiler-sfc";
 import { baseParse as parseTemplate } from "@vue/compiler-dom";
 
-const i18nFns = config.i18nFns || ["t", "$t"];
+const traverse = traverseModule.default;
 
-function extractKeysFromCode(code: string): string[] {
+function extractKeysFromCode(code: string, i18nFns: string[]): string[] {
   const keys = new Set<string>();
   let ast;
 
@@ -42,15 +41,17 @@ function extractKeysFromCode(code: string): string[] {
   return [...keys];
 }
 
-function extractKeysFromVueTemplate(template: string): string[] {
+function extractKeysFromVueTemplate(
+  template: string,
+  i18nFns: string[]
+): string[] {
   const keys = new Set<string>();
-
   const ast = parseTemplate(template);
 
   function walk(node: any) {
     if (!node || typeof node !== "object") return;
 
-    // 处理插值表达式 {{ t('xxx') }}
+    // handle {{ t('xxx') }}
     if (node.type === 5 && node.content?.content) {
       const expr = node.content.content;
 
@@ -81,10 +82,9 @@ function extractKeysFromVueTemplate(template: string): string[] {
       } catch {}
     }
 
-    // 通用递归（核心）
+    // handle child nodes
     for (const key in node) {
       const value = node[key];
-
       if (value && typeof value === "object") {
         walk(value);
       }
@@ -92,27 +92,35 @@ function extractKeysFromVueTemplate(template: string): string[] {
   }
 
   walk(ast);
-
   return [...keys];
 }
 
 export async function extractKeys(file: string): Promise<string[]> {
+  let config;
+  try {
+    const imported = await import("../i18n.config.ts");
+    config = imported.default;
+  } catch (err) {
+    throw new Error(`load i18n.config.ts failed: ${(err as Error).message}`);
+  }
+
+  const i18nFns = config.i18nFns || ["t", "$t"];
+
   const allContent = await readFile(file, "utf-8");
   const keys = new Set<string>();
 
   if (/\.(js|ts|jsx|tsx)$/.test(file)) {
-    extractKeysFromCode(allContent).forEach((k) => keys.add(k));
+    extractKeysFromCode(allContent, i18nFns).forEach((k) => keys.add(k));
   } else if (/\.vue$/.test(file)) {
     const sfc = parseVue(allContent);
-
     const script = sfc.descriptor.script?.content || "";
     const scriptSetup = sfc.descriptor.scriptSetup?.content || "";
     const template = sfc.descriptor.template?.content || "";
 
-    extractKeysFromCode(script).forEach((k) => keys.add(k));
-    extractKeysFromCode(scriptSetup).forEach((k) => keys.add(k));
-    extractKeysFromVueTemplate(template).forEach((k) => keys.add(k));
+    extractKeysFromCode(script, i18nFns).forEach((k) => keys.add(k));
+    extractKeysFromCode(scriptSetup, i18nFns).forEach((k) => keys.add(k));
+    extractKeysFromVueTemplate(template, i18nFns).forEach((k) => keys.add(k));
   }
 
-  return [...keys];
+  return keys.size ? Array.from(keys) : [];
 }

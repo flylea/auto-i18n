@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+src/views/
+src/pages/
+src/components/ 
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -27,3 +31,4 @@ dist-ssr
 yarn.lock
 *.local
 *.dev
+test.ts
