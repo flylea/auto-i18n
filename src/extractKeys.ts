@@ -3,6 +3,7 @@ import { parse } from "@babel/parser";
 import traverseModule from "@babel/traverse";
 import { parse as parseVue } from "@vue/compiler-sfc";
 import { baseParse as parseTemplate } from "@vue/compiler-dom";
+import type { NodePath } from "@babel/traverse";
 
 const traverse = traverseModule.default;
 
@@ -20,7 +21,7 @@ function extractKeysFromCode(code: string, i18nFns: string[]): string[] {
   }
 
   traverse(ast, {
-    CallExpression(path) {
+    CallExpression(path:NodePath) {
       const callee = path.node.callee;
 
       if (
@@ -62,7 +63,7 @@ function extractKeysFromVueTemplate(
         });
 
         traverse(exprAst, {
-          CallExpression(path) {
+          CallExpression(path:NodePath) {
             const callee = path.node.callee;
 
             if (

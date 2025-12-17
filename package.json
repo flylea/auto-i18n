@@ -12,12 +12,14 @@
   "license": "ISC",
   "packageManager": "pnpm@10.24.0",
   "devDependencies": {
+    "@types/babel__traverse": "^7.28.0",
     "@types/node": "^24.10.2",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@babel/parser": "^7.28.5",
     "@babel/traverse": "^7.28.5",
+    "@types/cli-progress": "^3.11.6",
     "@vue/compiler-dom": "^3.5.25",
     "@vue/compiler-sfc": "^3.3.4",
     "chalk": "^4.1.2",

@@ -12,9 +12,7 @@ dist
 dist-ssr
 *.local
 
-src/views/
-src/pages/
-src/components/ 
+playground/
 
 # Editor directories and files
 .vscode/*
