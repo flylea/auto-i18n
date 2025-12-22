@@ -4,7 +4,7 @@ export async function scanFiles() {
 
   let config;
   try {
-    const imported = await import("../i18n.config.ts");
+    const imported = await import("../i18n.config.js");
     config = imported.default;
   } catch (err) {
     throw new Error("i18n.config.ts not exists or format error");

@@ -9,7 +9,7 @@ export default {
     "tsx",
     "jsx"
   ],
-  "output": "ts",
+  "output": "ts" as "ts" | "js" | "json",
   "outputDir": "src/i18n/locale",
   "withFileComment": true,
   "i18nFns": [

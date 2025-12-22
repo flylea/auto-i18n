@@ -1,178 +1,183 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import chalk from 'chalk';
+import fs from "node:fs";
+import path from "node:path";
+import chalk from "chalk";
 
-// 配置类型
 export interface I18nConfig {
-  output: 'ts' | 'js' | 'json';
+  output: "ts" | "js" | "json";
   outputDir: string;
-  withFileComment: boolean; // 保留总文件注释（可选）
+  withFileComment: boolean;
   supportChineseKey: boolean;
   languages: string[];
 }
 
 /**
- * 将扁平的层级key转换为嵌套对象（带注释）
- * @param flatData 扁平数据 { "common.inputText": "Please input" }
- * @param keyFileMap key-文件路径映射
- * @returns 嵌套对象 + 注释映射（记录每个key对应的注释）
+ * 扁平 key => 嵌套对象
  */
-const flatToNestedWithComment = (
-  flatData: Record<string, string>,
-  keyFileMap: Map<string, Set<string>>
-): { nestedObj: Record<string, any>; commentMap: Map<string, string> } => {
-  const nestedObj: Record<string, any> = {};
-  const commentMap = new Map<string, string>(); // key: 层级路径（如common.inputText）, value: 注释文本
+function flatToNested(flat: Record<string, string>) {
+  const nested: Record<string, any> = {};
 
-  // 1. 先构建注释映射（合并多文件路径）
-  Object.keys(flatData).forEach((fullKey) => {
-    const filePaths = keyFileMap.get(fullKey) || new Set();
-    // 注释文本：去重后用换行分隔，如 // views/login/index.vue\n// views/user/index.vue
-    const commentText = Array.from(filePaths)
-      .map((path) => `// ${path}`)
-      .join('\n');
-    commentMap.set(fullKey, commentText);
-  });
+  for (const [fullKey, value] of Object.entries(flat)) {
+    const segments = fullKey.split(".");
+    let cur = nested;
 
-  // 2. 构建嵌套对象
-  Object.entries(flatData).forEach(([fullKey, value]) => {
-    const keySegments = fullKey.split('.');
-    let current = nestedObj;
-
-    for (let i = 0; i < keySegments.length; i++) {
-      const segment = keySegments[i];
-      const isLastSegment = i === keySegments.length - 1;
-
-      if (isLastSegment) {
-        current[segment] = value;
+    segments.forEach((seg, idx) => {
+      if (idx === segments.length - 1) {
+        cur[seg] = value;
       } else {
-        if (!current[segment]) {
-          current[segment] = {};
-        }
-        current = current[segment];
+        cur[seg] ||= {};
+        cur = cur[seg];
       }
-    }
-  });
+    });
+  }
 
-  return { nestedObj, commentMap };
-};
+  return nested;
+}
 
 /**
- * 递归生成带注释的嵌套对象字符串
+ * 构建「顶层 key -> 文件路径集合」映射
+ * user.avatar -> user
  */
-const generateNestedStringWithComment = (
-  obj: any,
-  commentMap: Map<string, string>,
-  config: I18nConfig,
-  parentKey = '',
-  currentIndent = 2
-): string => {
-  const indentStr = ' '.repeat(currentIndent);
-  const nextIndent = currentIndent + 2;
-  const entries = Object.entries(obj);
+function buildTopLevelFileMap(
+  keyFileMap: Map<string, Set<string>>
+): Map<string, Set<string>> {
+  const result = new Map<string, Set<string>>();
+
+  for (const [fullKey, files] of keyFileMap.entries()) {
+    const topKey = fullKey.split(".")[0];
+
+    if (!result.has(topKey)) {
+      result.set(topKey, new Set());
+    }
+
+    files.forEach((f) => result.get(topKey)!.add(f));
+  }
+
+  return result;
+}
+
+/**
+ * 递归生成对象字符串
+ * 注释只出现在顶层
+ */
+function stringifyObject(
+  obj: Record<string, any>,
+  options: {
+    indent: number;
+    level: number;
+    isJSON: boolean;
+    keyFileMap?: Map<string, Set<string>>;
+    supportChineseKey: boolean;
+  }
+): string {
+  const { indent, level, isJSON, keyFileMap, supportChineseKey } = options;
+  const pad = " ".repeat(indent * level);
+  const nextPad = " ".repeat(indent * (level + 1));
+
   const lines: string[] = [];
+  const entries = Object.entries(obj);
 
   entries.forEach(([key, value], index) => {
-    // 1. 拼接当前key的完整层级路径（如common.inputText）
-    const fullKey = parentKey ? `${parentKey}.${key}` : key;
-    // 2. 获取当前key的注释（优先取完整key的注释，无则取父级）
-    const comment = commentMap.get(fullKey) || '';
+    const isTopLevel = level === 0;
 
-    // 3. 添加注释（非空则插入）
-    if (comment) {
-      lines.push(''); // 空行分隔注释和key
-      lines.push(indentStr + comment);
+    // 顶层路径注释（非 json）
+    if (!isJSON && isTopLevel && keyFileMap) {
+      const files = keyFileMap.get(key);
+      if (files && files.size > 0) {
+        lines.push("");
+        files.forEach((file) => {
+          lines.push(`${nextPad}// ${file}`);
+        });
+      }
     }
 
-    // 4. 处理key的引号（中文key）
-    const keyStr = /[\u4e00-\u9fa5]/.test(key) && config.supportChineseKey
-      ? `'${key}'`
-      : key;
+    const keyStr =
+      supportChineseKey && /[\u4e00-\u9fa5]/.test(key) ? `'${key}'` : key;
 
-    // 5. 处理值（嵌套对象/普通值）
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      // 嵌套对象
-      lines.push(`${indentStr}${keyStr}: {`);
-      const childContent = generateNestedStringWithComment(
-        value,
-        commentMap,
-        config,
-        fullKey,
-        nextIndent
+    if (typeof value === "object" && value !== null) {
+      lines.push(`${nextPad}${keyStr}: {`);
+      lines.push(
+        stringifyObject(value, {
+          ...options,
+          level: level + 1,
+        })
       );
-      lines.push(childContent);
-      lines.push(`${indentStr}}${index < entries.length - 1 ? ',' : ''}`);
+      lines.push(
+        `${nextPad}}${index < entries.length - 1 ? "," : ""}`
+      );
     } else {
-      // 普通值（转义单引号）
-      const valueStr = typeof value === 'string'
-        ? `'${value.replace(/'/g, "\\'")}'`
-        : JSON.stringify(value);
-      lines.push(`${indentStr}${keyStr}: ${valueStr}${index < entries.length - 1 ? ',' : ''}`);
+      const val =
+        typeof value === "string"
+          ? `'${value.replace(/'/g, "\\'")}'`
+          : JSON.stringify(value);
+
+      lines.push(
+        `${nextPad}${keyStr}: ${val}${
+          index < entries.length - 1 ? "," : ""
+        }`
+      );
     }
   });
 
-  return lines.join('\n');
-};
+  return lines.join("\n");
+}
 
 /**
- * 写入带文件路径注释的国际化文件
+ * 写入 i18n 文件（最终入口）
  */
-export const writeI18nFiles = async (
+export async function writeI18nFiles(
   translateResult: Record<string, Record<string, string>>,
   keyFileMap: Map<string, Set<string>>,
   config: I18nConfig,
   logger: any
-) => {
-  try {
-    // 1. 创建输出目录
-    const outputDirAbs = path.resolve(process.cwd(), config.outputDir);
-    if (!fs.existsSync(outputDirAbs)) {
-      fs.mkdirSync(outputDirAbs, { recursive: true });
-      logger.info(`Created output directory: ${outputDirAbs}`);
+) {
+  const outputDir = path.resolve(process.cwd(), config.outputDir);
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const isJSON = config.output === "json";
+  const topLevelFileMap = buildTopLevelFileMap(keyFileMap);
+
+  for (const lang of config.languages) {
+    const flat: Record<string, string> = {};
+
+    Object.entries(translateResult).forEach(([key, map]) => {
+      if (map[lang]) flat[key] = map[lang];
+    });
+
+    const nested = flatToNested(flat);
+    const lines: string[] = [];
+
+    // 文件头注释
+    if (config.withFileComment && !isJSON) {
+      lines.push(
+        "/**",
+        ` * I18n locale file: ${lang}`,
+        ` * Auto-generated by auto-i18n`,
+        ` * Generated at: ${new Date().toLocaleString()}`,
+        " */"
+      );
     }
 
-    // 2. 遍历语言生成文件
-    for (const lang of config.languages) {
-      const fileExt = config.output;
-      const fileName = `${lang}.${fileExt}`;
-      const filePath = path.join(outputDirAbs, fileName);
-
-      // 2.1 构建当前语言的扁平数据
-      const langFlatData: Record<string, string> = {};
-      Object.entries(translateResult).forEach(([fullKey, langMap]) => {
-        if (langMap[lang]) {
-          langFlatData[fullKey] = langMap[lang];
-        }
-      });
-
-      // 2.2 扁平转嵌套（带注释映射）
-      const { nestedObj, commentMap } = flatToNestedWithComment(langFlatData, keyFileMap);
-
-      // 2.3 生成文件内容
-      const contentLines: string[] = [];
-      // 总文件注释（可选）
-      if (config.withFileComment) {
-        contentLines.push(`/**`);
-        contentLines.push(` * I18n locale file for ${lang}`);
-        contentLines.push(` * Auto-generated by auto-i18n CLI`);
-        contentLines.push(` * Generated time: ${new Date().toLocaleString()}`);
-        contentLines.push(` */`);
-      }
-      // 核心：默认导出 + 带注释的嵌套对象
-      contentLines.push(`export default {`);
-      contentLines.push(generateNestedStringWithComment(nestedObj, commentMap, config));
-      contentLines.push(`};`);
-
-      const fileContent = contentLines.join('\n').replace(/^\n+/, ''); // 去除开头空行
-
-      // 2.4 写入文件
-      fs.writeFileSync(filePath, fileContent, 'utf-8');
-      logger.success(`Generated ${chalk.yellow(fileName)} at ${filePath}`);
+    if (isJSON) {
+      lines.push(JSON.stringify(nested, null, 2));
+    } else {
+      lines.push("export default {");
+      lines.push(
+        stringifyObject(nested, {
+          indent: 2,
+          level: 0,
+          isJSON,
+          keyFileMap: topLevelFileMap,
+          supportChineseKey: config.supportChineseKey,
+        })
+      );
+      lines.push("};");
     }
 
-    logger.success(`All i18n files generated successfully! Output dir: ${outputDirAbs}`);
-  } catch (err) {
-    logger.error(`Write i18n files failed: ${(err as Error).message}`);
-    throw err;
+    const filePath = path.join(outputDir, `${lang}.${config.output}`);
+    fs.writeFileSync(filePath, lines.join("\n"), "utf-8");
+
+    logger.success(
+      `Generated ${chalk.yellow(`${lang}.${config.output}`)}`
+    );
   }
-};
+}

@@ -4,7 +4,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { scanFiles } from "./scanFiles.js";
 import { extractKeys } from "./extractKeys.js";
-import translate from "./ai.ts";
+import translate from "./ai.js";
 import { logger, print, pickKeys } from "./utils/index.js";
 
 const program = new Command();
@@ -15,36 +15,30 @@ const onAction = async () => {
     await print("AUTO I18N");
 
     const configPath = path.resolve(process.cwd(), "i18n.config.ts");
-    const { genI18nConfig } = await import("./utils/genI18nConfig.ts");
+    const { genI18nConfig } = await import("./utils/genI18nConfig.js");
 
     if (!(await fs.access(configPath).then(() => true).catch(() => false))) {
       await genI18nConfig();
     }
 
-    /* scan files */
     const files = await scanFiles();
-    if (files.length === 0) return;
+    if (!files.length) return;
 
-    const config = await import("../i18n.config.ts");
+    const { default: config } = await import("../i18n.config.js");
     const translateResult: Record<string, Record<string, string>> = {};
     const keyFileMap = new Map<string, Set<string>>();
 
-    /* extract keys */
     for (const file of files) {
       try {
         const keys = await extractKeys(file);
         const allKeys = pickKeys(keys);
 
         for (const key of allKeys) {
-          if (!keyFileMap.has(key)) {
-            keyFileMap.set(key, new Set());
-          }
+          if (!keyFileMap.has(key)) keyFileMap.set(key, new Set());
           keyFileMap.get(key)?.add(file);
 
-          for (const lang of config.default.languages) {
-            if (!translateResult[key]) {
-              translateResult[key] = {};
-            }
+          for (const lang of config.languages) {
+            if (!translateResult[key]) translateResult[key] = {};
             const result = await translate(key, lang);
             translateResult[key][lang] = result;
             logger.info(`Translated "${key}" to ${lang}: ${result}`);
@@ -55,19 +49,13 @@ const onAction = async () => {
       }
     }
 
-    // Write i18n files
     const { writeI18nFiles } = await import("./writeFile.js");
-    await writeI18nFiles(translateResult, keyFileMap, config.default, logger);
+    await writeI18nFiles(translateResult, keyFileMap, config, logger);
   } catch (err) {
     logger.error(`Execute failed: ${(err as Error).message}`);
     process.exit(1);
   }
 };
 
-
-program
-  .command("scan")
-  .description("scan project and print i18n keys")
-  .action(onAction);
-
+program.command("scan").description("scan project and print i18n keys").action(onAction);
 program.parse(process.argv);

@@ -20,23 +20,16 @@ export const print = async (message:string) => {
 }
 
 export const pickKeys = (keys: string[] | string) => {
- 
-  const keyList = typeof keys === "string" ? [keys] : [...(keys || [])];
-  
+  const keyList = typeof keys === "string" ? [keys] : keys || [];
   const result = new Set<string>();
 
   keyList.forEach((rawKey) => {
-    
     const cleanKey = (rawKey || "").trim();
     if (!cleanKey) return;
 
-    const keySegments = cleanKey.split(".");
-    const finalKey = keySegments.pop() || ""; 
-    
-    if (finalKey) {
-      result.add(finalKey);
-    }
+    result.add(cleanKey);
   });
 
   return Array.from(result);
 };
+

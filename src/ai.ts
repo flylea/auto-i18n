@@ -15,10 +15,15 @@ const rules = `
 - "email"
 - "title"
 - "name"
+- "user.avatar"
+
+根据 key 翻译成目标语言，遵循以下 
 
 规则：
 1. 输出必须是字符串。
 2. 只返回 target 目标语言的内容，不要解释、不要日志、不要 markdown。
+3. 如果 key 包含. 表示嵌套对象的路径，说明是一个页面的模块，只翻译最后一级。
+  eg: "user.avatar" 只翻译 "avatar"
 
 示例：
 输入 translate ("title", "zh-CN")

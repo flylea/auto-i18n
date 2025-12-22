@@ -1,24 +1,35 @@
 {
   "name": "i18n-a11y",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "i18n": "tsx src/cli.ts scan"
+  "description": "CLI tool for generating i18n files",
+  "main": "dist/index.js",
+  "bin": {
+    "auto-i18n": "dist/src/cli.js"
   },
   "type": "module",
-  "keywords": [],
+  "scripts": {
+    "build": "tsc",
+    "i18n:build": "node dist/src/cli.js scan",
+    "i18n:local": "node src/cli.js scan",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "i18n",
+    "cli",
+    "typescript"
+  ],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.24.0",
   "devDependencies": {
     "@types/babel__traverse": "^7.28.0",
     "@types/node": "^24.10.2",
+    "dotenv": "^17.2.3",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@babel/parser": "^7.28.5",
     "@babel/traverse": "^7.28.5",
+    "@babel/types": "^7.28.5",
     "@types/cli-progress": "^3.11.6",
     "@vue/compiler-dom": "^3.5.25",
     "@vue/compiler-sfc": "^3.3.4",
@@ -26,12 +37,10 @@
     "cli-progress": "^3.12.0",
     "colors": "^1.4.0",
     "commander": "^14.0.2",
-    "dotenv": "^17.2.3",
     "fast-glob": "^3.3.3",
     "figlet": "^1.9.4",
     "inquirer": "^13.1.0",
     "openai": "^4.26.0",
-    "p-limit": "^5.0.0",
-    "tsx": "^4.21.0"
+    "p-limit": "^5.0.0"
   }
 }
