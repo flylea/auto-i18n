@@ -22,21 +22,23 @@ pnpm i i18n-a11y -D
 
 ```json
    {
-  entryDirs: ["src/views", "src/components"], 
-  extensions: ["vue"], 
-  output: "ts",
-  outputDir: "src/i18n/locales", 
-  withFileComment: false, 
-  withKeyFileComment: false, 
-  i18nFns: ["t", "$t"],
-  supportChineseKey: true, 
-  languages: ["zh-CN", "en-US"],
+  "entryDirs": ["src/views", "src/components"],
+  "extensions": ["vue"],
+  "output": "ts",
+  "outputDir": "src/i18n/locales",
+  "withFileComment": false,
+  "withKeyFileComment": false,
+  "i18nFns": ["t", "$t"],
+  "supportChineseKey": true,
+  "languages": ["zh-CN", "en-US"],
 };
 ```
+
 ## Environment Variables
 
 Create a `.env.local` file in the project root and add:
-``` bash
+
+```bash
    DEEPSEEK_API_KEY=your-deepseek-key-here
    DEEPSEEK_API_URL=https://api.deepseek.com
 ```
