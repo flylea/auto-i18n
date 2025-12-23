@@ -18,8 +18,16 @@
     "cli",
     "typescript"
   ],
-  "author": "",
-  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/flylea/auto-i18n.git"
+  },
+  "author": "hi@flylea.com",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/flylea/auto-i18n/issues"
+  },
+  "homepage": "https://github.com/flylea/auto-i18n#readme",
   "devDependencies": {
     "@types/babel__traverse": "^7.28.0",
     "@types/node": "^24.10.2",
