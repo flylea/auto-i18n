@@ -1,3 +1,6 @@
+import { loadEnv } from "./utils/index.js";  
+loadEnv(); 
+
 import OpenAI from "openai";
 
 const openai = new OpenAI({
@@ -28,7 +31,7 @@ const rules = `
 输出：标题
 `;
 
-export default async function translate(key: string, target: string) {
+ const translate = async (key: string, target: string) => {
   const completion = await openai.chat.completions.create({
     model: "deepseek-chat",
     messages: [
@@ -47,3 +50,5 @@ export default async function translate(key: string, target: string) {
   const content = completion.choices[0].message.content;
   return content?.trim() || "";
 }
+
+export default translate;

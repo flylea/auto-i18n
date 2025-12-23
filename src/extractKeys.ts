@@ -8,7 +8,7 @@ import type { NodePath } from '@babel/traverse';
 
 const traverse = traverseModule.default;
 
-export function extractKeysFromCode(code: string, i18nFns: string[]) {
+export const extractKeysFromCode = (code: string, i18nFns: string[]) => {
   const keys = new Set<string>();
   let ast;
   try {
@@ -39,11 +39,11 @@ export function extractKeysFromCode(code: string, i18nFns: string[]) {
   return Array.from(keys);
 }
 
-export function extractKeysFromVueTemplate(template: string, i18nFns: string[]) {
+export const extractKeysFromVueTemplate = (template: string, i18nFns: string[]) => {
   const keys = new Set<string>();
   const ast = parseTemplate(template);
 
-  function walk(node: any) {
+  const walk = (node: any) => {
     if (!node || typeof node !== "object") return;
 
     if (node.type === 5 && node.content?.content) {
@@ -77,10 +77,10 @@ export function extractKeysFromVueTemplate(template: string, i18nFns: string[]) 
   }
 
   walk(ast);
-  return Array.from(keys);
+  return Array.from(keys); 
 }
 
-export async function extractKeys(file: string) {
+export const extractKeys = async(file: string) => {
   let config: any;
   try {
     const imported = await import("../i18n.config.js");

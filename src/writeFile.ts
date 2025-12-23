@@ -3,15 +3,20 @@ import path from "node:path";
 import chalk from "chalk";
 
 export interface I18nConfig {
+  entryDirs: string[];
+  extensions: string[];
   output: "ts" | "js" | "json";
   outputDir: string;
-  withFileComment: boolean;
+  withFileComment: boolean;      // 文件头注释
+  withKeyFileComment: boolean;   // key → 文件路径注释
+  i18nFns: string[];
   supportChineseKey: boolean;
   languages: string[];
 }
 
 /**
  * 扁平 key => 嵌套对象
+ * user.avatar => { user: { avatar: ... } }
  */
 function flatToNested(flat: Record<string, string>) {
   const nested: Record<string, any> = {};
@@ -57,7 +62,8 @@ function buildTopLevelFileMap(
 
 /**
  * 递归生成对象字符串
- * 注释只出现在顶层
+ * - 只在顶层输出 key → 文件路径注释
+ * - 是否输出完全由配置控制
  */
 function stringifyObject(
   obj: Record<string, any>,
@@ -67,20 +73,32 @@ function stringifyObject(
     isJSON: boolean;
     keyFileMap?: Map<string, Set<string>>;
     supportChineseKey: boolean;
+    withKeyFileComment: boolean;
   }
 ): string {
-  const { indent, level, isJSON, keyFileMap, supportChineseKey } = options;
-  const pad = " ".repeat(indent * level);
-  const nextPad = " ".repeat(indent * (level + 1));
+  const {
+    indent,
+    level,
+    isJSON,
+    keyFileMap,
+    supportChineseKey,
+    withKeyFileComment,
+  } = options;
 
+  const nextPad = " ".repeat(indent * (level + 1));
   const lines: string[] = [];
   const entries = Object.entries(obj);
 
   entries.forEach(([key, value], index) => {
     const isTopLevel = level === 0;
 
-    // 顶层路径注释（非 json）
-    if (!isJSON && isTopLevel && keyFileMap) {
+    // 顶层 key → 来源文件注释
+    if (
+      !isJSON &&
+      isTopLevel &&
+      withKeyFileComment &&
+      keyFileMap
+    ) {
       const files = keyFileMap.get(key);
       if (files && files.size > 0) {
         lines.push("");
@@ -91,7 +109,9 @@ function stringifyObject(
     }
 
     const keyStr =
-      supportChineseKey && /[\u4e00-\u9fa5]/.test(key) ? `'${key}'` : key;
+      supportChineseKey && /[\u4e00-\u9fa5]/.test(key)
+        ? `'${key}'`
+        : key;
 
     if (typeof value === "object" && value !== null) {
       lines.push(`${nextPad}${keyStr}: {`);
@@ -146,7 +166,7 @@ export async function writeI18nFiles(
     const nested = flatToNested(flat);
     const lines: string[] = [];
 
-    // 文件头注释
+    // 文件头注释（严格受控）
     if (config.withFileComment && !isJSON) {
       lines.push(
         "/**",
@@ -168,6 +188,7 @@ export async function writeI18nFiles(
           isJSON,
           keyFileMap: topLevelFileMap,
           supportChineseKey: config.supportChineseKey,
+          withKeyFileComment: config.withKeyFileComment,
         })
       );
       lines.push("};");

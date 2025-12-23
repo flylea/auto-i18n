@@ -1,5 +1,8 @@
 import chalk from 'chalk';
 import figlet from "figlet";
+import fs from "fs";
+import path from "path";
+import dotenv from "dotenv";
 
 const getTimestamp = () => new Date().toLocaleString();
 
@@ -32,10 +35,6 @@ export const pickKeys = (keys: string[] | string) => {
 
   return Array.from(result);
 };
-
-import fs from "fs";
-import path from "path";
-import dotenv from "dotenv";
 
 export function loadEnv() {
   const cwd = process.cwd();
