@@ -1,6 +1,6 @@
 {
   "name": "i18n-a11y",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "CLI tool for generating i18n files",
   "main": "dist/index.js",
   "bin": {
@@ -12,7 +12,7 @@
     "i18n:build": "node dist/src/cli.js scan",
     "i18n:local": "tsx src/cli.ts scan",
     "prepublishOnly": "npm run build",
-    "patch":"pnpm version patch && npm publish --access public"
+    "patch": "pnpm version patch && npm publish --access public"
   },
   "keywords": [
     "i18n",
@@ -23,7 +23,9 @@
     "type": "git",
     "url": "https://github.com/flylea/auto-i18n.git"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "author": "hi@flylea.com",
   "license": "MIT",
   "bugs": {
