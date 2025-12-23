@@ -22,15 +22,15 @@ pnpm i i18n-a11y -D
 
 ```json
    {
-  entryDirs: ["src/views", "src/components"], // scan entry directory
-  extensions: ["vue"], // scan file extensions
-  output: "ts", // output file type
-  outputDir: "src/i18n/locales", // output file directory
-  withFileComment: false, // add file comment on file top
-  withKeyFileComment: false, // add key file comment on key top
-  i18nFns: ["t", "$t"], // i18n function name
-  supportChineseKey: true,  // support chinese key
-  languages: ["zh-CN", "en-US"],  // languages
+  entryDirs: ["src/views", "src/components"], 
+  extensions: ["vue"], 
+  output: "ts",
+  outputDir: "src/i18n/locales", 
+  withFileComment: false, 
+  withKeyFileComment: false, 
+  i18nFns: ["t", "$t"],
+  supportChineseKey: true, 
+  languages: ["zh-CN", "en-US"],
 };
 ```
 ## Environment Variables
