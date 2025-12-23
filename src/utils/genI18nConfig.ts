@@ -65,7 +65,7 @@ export const genI18nConfig = async (): Promise<void> => {
       message: chalk.green(
         "Step 4: Enter output language directory"
       ),
-      default: "src/i18n/locale",
+      default: "src/i18n/locales",
     },
   ]);
 
