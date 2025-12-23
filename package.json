@@ -12,11 +12,12 @@
     "i18n:build": "node dist/src/cli.js scan",
     "i18n:local": "tsx src/cli.ts scan",
     "prepublishOnly": "npm run build",
-    "patch": "pnpm version patch && npm publish --access public"
+    "patch": "pnpm version patch",
+    "publish": "npm publish --access public"
   },
   "keywords": [
     "i18n",
-    "cli",
+    "cli", 
     "typescript"
   ],
   "repository": {
