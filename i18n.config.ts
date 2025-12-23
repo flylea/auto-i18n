@@ -1,8 +1,8 @@
 export default {
   "entryDirs": [
-    "playground/src/views",
-    "playground/src/pages",
-    "playground/src/components"
+    "/src/views",
+    "/src/pages",
+    "/src/components"
   ],
   "extensions": [
     "vue",
