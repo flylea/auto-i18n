@@ -2,13 +2,20 @@
 import { Command } from "commander";
 import path from "node:path";
 import fs from "node:fs/promises";
+
+import { logger, print, pickKeys,loadEnv } from "./utils/index.js";  
+loadEnv();                                     
+
 import { scanFiles } from "./scanFiles.js";
 import { extractKeys } from "./extractKeys.js";
 import translate from "./ai.js";
-import { logger, print, pickKeys } from "./utils/index.js";
 
 const program = new Command();
-program.name("auto-i18n").description("I18n a11y CLI").version("1.0.0");
+
+program
+  .name("auto-i18n")
+  .description("I18n a11y CLI")
+  .version("1.0.0");
 
 const onAction = async () => {
   try {
@@ -17,7 +24,12 @@ const onAction = async () => {
     const configPath = path.resolve(process.cwd(), "i18n.config.ts");
     const { genI18nConfig } = await import("./utils/genI18nConfig.js");
 
-    if (!(await fs.access(configPath).then(() => true).catch(() => false))) {
+    const exists = await fs
+      .access(configPath)
+      .then(() => true)
+      .catch(() => false);
+
+    if (!exists) {
       await genI18nConfig();
     }
 
@@ -25,6 +37,7 @@ const onAction = async () => {
     if (!files.length) return;
 
     const { default: config } = await import("../i18n.config.js");
+
     const translateResult: Record<string, Record<string, string>> = {};
     const keyFileMap = new Map<string, Set<string>>();
 
@@ -34,18 +47,23 @@ const onAction = async () => {
         const allKeys = pickKeys(keys);
 
         for (const key of allKeys) {
-          if (!keyFileMap.has(key)) keyFileMap.set(key, new Set());
-          keyFileMap.get(key)?.add(file);
+          if (!keyFileMap.has(key)) {
+            keyFileMap.set(key, new Set());
+          }
+          keyFileMap.get(key)!.add(file);
 
           for (const lang of config.languages) {
-            if (!translateResult[key]) translateResult[key] = {};
+            translateResult[key] ??= {};
             const result = await translate(key, lang);
             translateResult[key][lang] = result;
+
             logger.info(`Translated "${key}" to ${lang}: ${result}`);
           }
         }
       } catch (err) {
-        logger.error(`Extract keys from ${file} failed: ${(err as Error).message}`);
+        logger.error(
+          `Extract keys from ${file} failed: ${(err as Error).message}`
+        );
       }
     }
 
@@ -57,5 +75,9 @@ const onAction = async () => {
   }
 };
 
-program.command("scan").description("scan project and print i18n keys").action(onAction);
+program
+  .command("scan")
+  .description("scan project and generate i18n files")
+  .action(onAction);
+
 program.parse(process.argv);
