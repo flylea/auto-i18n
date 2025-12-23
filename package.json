@@ -7,32 +7,42 @@
     "auto-i18n": "dist/src/cli.js"
   },
   "type": "module",
+
   "scripts": {
     "build": "tsc",
+
     "i18n:build": "node dist/src/cli.js scan",
     "i18n:local": "tsx src/cli.ts scan",
-    "prepublishOnly": "npm run build",
-    "patch": "pnpm version patch",
-    "publish": "npm publish --access public"
+
+    "release:patch": "pnpm version patch",
+    "release:minor": "pnpm version minor",
+    "release:major": "pnpm version major",
+
+    "publish:npm": "npm publish --access public"
   },
-  "keywords": [
-    "i18n",
-    "cli",
-    "typescript"
-  ],
+
+  "prepublishOnly": "npm run build",
+
+  "keywords": ["i18n", "cli", "typescript"],
+
   "repository": {
     "type": "git",
     "url": "https://github.com/flylea/auto-i18n.git"
   },
+
   "files": [
     "dist"
   ],
+
   "author": "hi@flylea.com",
   "license": "MIT",
+
   "bugs": {
     "url": "https://github.com/flylea/auto-i18n/issues"
   },
+
   "homepage": "https://github.com/flylea/auto-i18n#readme",
+
   "devDependencies": {
     "@types/babel__traverse": "^7.28.0",
     "@types/node": "^24.10.2",
@@ -40,6 +50,7 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
+
   "dependencies": {
     "@babel/parser": "^7.28.5",
     "@babel/traverse": "^7.28.5",
