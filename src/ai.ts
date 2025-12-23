@@ -1,7 +1,4 @@
 import OpenAI from "openai";
-import dotenv from "dotenv";
-import path from "path";
-dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
 const openai = new OpenAI({
   baseURL: process.env.DEEPSEEK_API_URL,

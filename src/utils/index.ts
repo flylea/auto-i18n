@@ -33,3 +33,28 @@ export const pickKeys = (keys: string[] | string) => {
   return Array.from(result);
 };
 
+import fs from "fs";
+import path from "path";
+import dotenv from "dotenv";
+
+export function loadEnv() {
+  const cwd = process.cwd();
+
+  const candidates = [
+    path.resolve(cwd, "env/.env.local"),
+    path.resolve(cwd, "env/.env"),
+    path.resolve(cwd, ".env.local"),
+    path.resolve(cwd, ".env"),
+  ];
+
+  for (const filePath of candidates) {
+    if (fs.existsSync(filePath)) {
+      dotenv.config({ path: filePath });
+      return filePath;
+    }
+  }
+
+  return null;
+}
+
+
