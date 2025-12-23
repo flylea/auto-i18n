@@ -1,6 +1,6 @@
 {
   "name": "i18n-a11y",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "CLI tool for generating i18n files",
   "main": "dist/index.js",
   "bin": {
