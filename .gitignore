@@ -1,38 +1,19 @@
-# Dependencies
-node_modules/
-
-# Build output
+# Binaries
 dist/
+*.exe
 
-# Environment files (contain API keys)
-.env
-.env.local
-.env.*.local
+# Go
+vendor/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# IDE
+.vscode/
+.idea/
+*.swp
 
-# Logs
-logs/
-
-# Playground output (generated files)
+# Playgrouns output
 playground/src/i18n/
 playground/.env
+
+# Misc
 *.log
-npm-debug.log*
-pnpm-debug.log*
-
-# Test coverage
-coverage/
-
-# Temporary files
-*.tmp
-*.bak
+.DS_Store

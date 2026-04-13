@@ -1,4 +1,4 @@
-name: Release & Publish
+name: Release
 
 on:
   push:
@@ -6,29 +6,24 @@ on:
       - "v*"
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org/
-
-      - name: Enable pnpm
-        run: corepack enable
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          go-version: "1.21"
 
       - name: Build
-        run: pnpm run build
+        run: go build -o dist/auto-i18n ./cmd/auto-i18n
 
-      - name: Publish to npm
-        run: npm publish --access public
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/auto-i18n
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
