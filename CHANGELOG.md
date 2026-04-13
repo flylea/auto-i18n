@@ -1,29 +1,22 @@
 # Changelog
 
-All notable changes will be documented in this file.
+## [2.0.0] - 2026-04-13
 
-## [1.0.8] - 2026-04-13
-
-### Changed
-- Refactored to use Node.js 22+ native TypeScript execution (`--experimental-strip-types`)
-- Removed `tsx` dependency
-- Moved `dotenv` to devDependencies
-- Updated `i18n:local` script to use native TS execution
-- Changed `prepublishOnly` to `prepare` lifecycle script
-- Removed unused `p-limit` dependency
+### Refactored
+- Complete rewrite in Go for better performance
+- Binary single-file distribution
 
 ### Added
-- `engines` field to specify Node.js >=22 requirement
-- `exports` field for proper module exports
-- `vitest` test framework with translation test cases
-- `test` and `test:watch` npm scripts
+- **Incremental translation** - Only translates new keys, preserves existing translations
+- **Merge mode** - Merges with existing language files without overwriting
+- **Dry run** - Preview changes without writing files
+- **Key validation** - `auto-i18n check` detects missing/orphaned keys
+- **React JSX/TSX support** - Extracts keys from React components
+- **Concurrent translation** - Translates multiple keys in parallel
 
-## [1.0.7] - Previous Release
+### Removed
+- Node.js/TypeScript implementation deprecated
 
-### Features
-- AI-powered translation via Deepseek API
-- Support for Vue, JS, and TS files
-- Configurable i18n function names (`t`, `$t`, `i18n.t`)
-- Optional file-level and key-level comments
-- Chinese key support
-- Interactive config generator
+## [1.0.x] - Previous versions
+
+See git history for Node.js version changes.

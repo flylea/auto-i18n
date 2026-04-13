@@ -14,6 +14,9 @@ import (
 
 var (
 	configPath string
+	dryRun    bool
+	merge     bool
+	scanAll   bool
 )
 
 var rootCmd = &cobra.Command{
@@ -28,15 +31,45 @@ locale files using Deepseek AI for automatic translations.`,
 	},
 }
 
+var incrementalCmd = &cobra.Command{
+	Use:   "incremental",
+	Short: "Translate only new keys (skip existing)",
+	Run: func(cmd *cobra.Command, args []string) {
+		merge = true
+		if err := runScan(); err != nil {
+			log.Fatalf("Error: %v", err)
+		}
+	},
+}
+
+var checkCmd = &cobra.Command{
+	Use:   "check",
+	Short: "Validate language files against source keys",
+	Run: func(cmd *cobra.Command, args []string) {
+		if err := runCheck(); err != nil {
+			log.Fatalf("Error: %v", err)
+		}
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(incrementalCmd, checkCmd)
+	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview changes without writing files")
+	rootCmd.Flags().BoolVar(&merge, "merge", false, "Merge with existing language files")
+	rootCmd.Flags().BoolVar(&scanAll, "all", false, "Scan all files (ignore git changes)")
+}
+
 func runScan() error {
-	// Load config
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Scan files for keys
-	extractor := scanner.New(cfg)
+	if dryRun {
+		fmt.Println("🔍 Dry run mode - no files will be written\n")
+	}
+
+	extractor := scanner.New(cfg, scanAll)
 	allKeys, keyFileMap, err := extractor.Scan()
 	if err != nil {
 		return fmt.Errorf("scan failed: %w", err)
@@ -49,19 +82,45 @@ func runScan() error {
 
 	fmt.Printf("Found %d translation keys\n", len(allKeys))
 
-	// Translate keys
 	trans := translator.New(cfg)
 	results, err := trans.Translate(allKeys)
 	if err != nil {
 		return fmt.Errorf("translation failed: %w", err)
 	}
 
-	// Write output files
+	if merge {
+		results = writer.MergeResults(cfg, results)
+	}
+
+	if dryRun {
+		writer.Preview(cfg, results)
+		return nil
+	}
+
 	if err := writer.Write(cfg, results, keyFileMap); err != nil {
 		return fmt.Errorf("write failed: %w", err)
 	}
 
 	fmt.Println("Done!")
+	return nil
+}
+
+func runCheck() error {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	extractor := scanner.New(cfg, false)
+	sourceKeys, _, err := extractor.Scan()
+	if err != nil {
+		return fmt.Errorf("scan failed: %w", err)
+	}
+
+	for _, lang := range cfg.Languages {
+		writer.Check(cfg, lang, sourceKeys)
+	}
+
 	return nil
 }
 

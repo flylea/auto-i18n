@@ -1,156 +1,125 @@
 # auto-i18n
 
-A CLI tool that automatically scans your codebase for i18n translation keys and generates locale files using AI-powered translation.
+AI-powered i18n CLI tool that automatically scans your codebase for translation keys and generates locale files.
 
 ## Features
 
-- **AI Translation** - Leverages Deepseek API for accurate, contextual translations
-- **Multi-framework Support** - Works with Vue (SFC), JavaScript, and TypeScript files
-- **Configurable** - Customize entry directories, file extensions, output format, and more
-- **Chinese Key Support** - Handles Chinese translation keys natively
-- **Clean Output** - Optional file header and key-source file comments
+- **AI Translation** - Leverages Deepseek API for accurate translations
+- **Git-Aware Scanning** - Only scans files changed since last commit (uses `git diff`)
+- **Multi-framework** - Supports Vue, React (JSX/TSX), and plain JS/TS
+- **Incremental Translation** - Only translates new keys, preserves existing translations
+- **Merge Mode** - Merges with existing language files without overwriting
+- **Dry Run** - Preview changes before writing files
+- **Key Validation** - Check for missing or orphaned keys in language files
 
 ## Requirements
 
-- Node.js >= 22.0.0
+- Go 1.21+
 - Deepseek API key
 
 ## Installation
 
 ```bash
-# Install as dev dependency
-pnpm add i18n-a11y -D
-
-# Or use via npx
-npx i18n-a11y scan
+# Download pre-built binary
+# Or build from source
+go build -o auto-i18n ./cmd/auto-i18n
 ```
 
-## Quick Start
+## Configuration
 
-1. Create a `.env.local` file in your project root:
+Create `i18n.config.json` in your project root:
+
+```json
+{
+  "entryDirs": ["src/views", "src/components", "src/pages"],
+  "extensions": ["vue", "jsx", "tsx"],
+  "output": "ts",
+  "outputDir": "src/i18n/locale",
+  "withFileComment": false,
+  "withKeyFileComment": false,
+  "i18nFns": ["t", "$t"],
+  "supportChineseKey": true,
+  "languages": ["zh-CN", "en-US"]
+}
+```
+
+## Environment Variables
 
 ```bash
-DEEPSEEK_API_KEY=your-deepseek-api-key
+DEEPSEEK_API_KEY=your-api-key
 DEEPSEEK_API_URL=https://api.deepseek.com
 ```
 
-2. Configure `i18n.config.ts` in your project root:
-
-```typescript
-export default {
-  // Directories to scan for translation keys
-  entryDirs: ["src/views", "src/components"],
-
-  // File extensions to scan
-  extensions: ["vue"],
-
-  // Output format: "ts" | "js" | "json"
-  output: "ts",
-
-  // Output directory for locale files
-  outputDir: "src/i18n/locale",
-
-  // Include file header comment
-  withFileComment: false,
-
-  // Include key → file path comments
-  withKeyFileComment: false,
-
-  // i18n function names to match
-  i18nFns: ["t", "$t"],
-
-  // Support Chinese keys
-  supportChineseKey: true,
-
-  // Target languages
-  languages: ["zh-CN", "en-US"],
-};
-```
-
-3. Run the scanner:
+## Commands
 
 ```bash
-# Using npm scripts
-pnpm i18n:local    # Run with TypeScript source (development)
-pnpm i18n:build    # Run with compiled JavaScript (production)
+# Scan and translate changed files (git-aware)
+# Only scans files modified/added since last commit
+auto-i18n
 
-# Or install globally and use directly
-npm install -g i18n-a11y
-auto-i18n scan
+# Scan all files (ignore git changes)
+# Useful for initial setup or full regeneration
+auto-i18n --all
+
+# Preview changes without writing files
+auto-i18n --dry-run
+
+# Incremental translation (only new keys, keep existing)
+auto-i18n incremental
+
+# Validate language files
+auto-i18n check
 ```
 
-## CLI Commands
+## Git-Aware Scanning
+
+By default, `auto-i18n` only scans files that have changed since the last commit:
 
 ```bash
-# Scan and generate i18n files
-auto-i18n scan
+# After making changes to code
+git commit -m "update user profile"
+auto-i18n
 
-# Interactive config generation (creates i18n.config.ts)
-auto-i18n init
+# CLI automatically detects:
+# - Modified .vue/.tsx files
+# - New .vue/.tsx files
+# Only translates keys from changed files
+```
+
+Use `--all` flag to force full scan:
+
+```bash
+auto-i18n --all
+```
+
+## Supported Patterns
+
+```javascript
+// Vue
+t('key')
+$t('key')
+i18n.t('key')
+
+// React
+useTranslation()['t']('key')
+t('key')
 ```
 
 ## Output
 
-After running, locale files will be generated in your specified output directory:
-
-```
-src/i18n/locale/
-├── zh-CN.ts
-└── en-US.ts
-```
-
-Example output file:
+Generated `src/i18n/locale/zh-CN.ts`:
 
 ```typescript
-// zh-CN.ts
 export default {
   user: {
-    name: "用户名",
-    email: "邮箱",
-    avatar: "头像",
+    name: '用户名',
+    email: '邮箱'
   },
   common: {
-    save: "保存",
-    cancel: "取消",
-  },
+    save: '保存',
+    cancel: '取消'
+  }
 };
-```
-
-## NPM Scripts
-
-| Script | Description |
-|--------|-------------|
-| `pnpm build` | Compile TypeScript to JavaScript |
-| `pnpm test` | Run tests |
-| `pnpm test:watch` | Run tests in watch mode |
-| `pnpm i18n:local` | Run with TypeScript source |
-| `pnpm i18n:build` | Run with compiled JS |
-| `pnpm release:patch` | Bump patch version |
-| `pnpm release:minor` | Bump minor version |
-| `pnpm release:major` | Bump major version |
-| `pnpm publish:npm` | Publish to npm |
-
-## Testing
-
-### Integration Test (Playground)
-
-The project includes a `playground/` directory with a sample Vue project for integration testing:
-
-```bash
-# Copy and configure environment
-cd playground
-cp .env.example .env.local
-# Edit .env.local with your Deepseek API key
-
-# Run the integration test
-node test-cli.mjs
-```
-
-### Unit Tests
-
-```bash
-pnpm test        # Run tests once
-pnpm test:watch  # Run tests in watch mode
 ```
 
 ## License

@@ -2,6 +2,7 @@ package translator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,6 +19,7 @@ type Translator struct {
 	cfg    *config.Config
 	apiKey string
 	apiURL string
+	client *http.Client
 }
 
 func New(cfg *config.Config) *Translator {
@@ -26,17 +28,24 @@ func New(cfg *config.Config) *Translator {
 	if apiURL == "" {
 		apiURL = "https://api.deepseek.com"
 	}
-	return &Translator{cfg: cfg, apiKey: apiKey, apiURL: apiURL}
+
+	return &Translator{
+		cfg:    cfg,
+		apiKey: apiKey,
+		apiURL: apiURL,
+		client: &http.Client{Timeout: 120 * time.Second},
+	}
 }
 
 func (t *Translator) Translate(keys []string) (types.TranslateResult, error) {
 	results := make(types.TranslateResult)
 
-	// Translate concurrently
+	// 并发控制：同时翻译多个 key
+	concurrency := 3
+	sem := make(chan struct{}, concurrency)
+
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	concurrency := 5
-	sem := make(chan struct{}, concurrency)
 
 	for _, key := range keys {
 		wg.Add(1)
@@ -47,15 +56,17 @@ func (t *Translator) Translate(keys []string) (types.TranslateResult, error) {
 
 			translations := make(map[string]string)
 			for _, lang := range t.cfg.Languages {
-				translation, err := t.translateKey(k, lang)
+				trans, err := t.translateKey(k, lang)
 				if err != nil {
 					fmt.Printf("Warning: failed to translate %s to %s: %v\n", k, lang, err)
-					translations[lang] = k // fallback to key
+					trans = k // 回退到 key 本身
 				} else {
-					translations[lang] = translation
-					fmt.Printf("Translated %q to %s: %s\n", k, lang, translation)
+					fmt.Printf("Translated %q to %s: %s\n", k, lang, trans)
 				}
-				time.Sleep(100 * time.Millisecond) // rate limiting
+				translations[lang] = trans
+
+				// API 限流保护：避免请求过于密集
+				time.Sleep(100 * time.Millisecond)
 			}
 
 			mu.Lock()
@@ -68,6 +79,7 @@ func (t *Translator) Translate(keys []string) (types.TranslateResult, error) {
 	return results, nil
 }
 
+// translateKey 单个 key 的翻译
 func (t *Translator) translateKey(key, targetLang string) (string, error) {
 	systemPrompt := `You are an i18n translation assistant.
 - Output ONLY the translated string, no explanation, no markdown.
@@ -86,12 +98,15 @@ Rules:
 		"temperature": 0,
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
 	}
 
-	req, err := http.NewRequest("POST", t.apiURL+"/chat/completions", bytes.NewBuffer(jsonPayload))
+	req, err := http.NewRequestWithContext(ctx, "POST", t.apiURL+"/chat/completions", bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return "", err
 	}
@@ -99,8 +114,7 @@ Rules:
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+t.apiKey)
 
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := t.client.Do(req)
 	if err != nil {
 		return "", err
 	}
