@@ -1,18 +1,13 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# Dependencies
+node_modules/
 
-node_modules
-dist
-dist-ssr
-*.local
+# Build output
+dist/
 
-playground/
+# Environment files (contain API keys)
+.env
+.env.local
+.env.*.local
 
 # Editor directories and files
 .vscode/*
@@ -24,9 +19,20 @@ playground/
 *.njsproj
 *.sln
 *.sw?
-*.rar
+
+# Logs
+logs/
+
+# Playground output (generated files)
+playground/src/i18n/
+playground/.env
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+
+# Temporary files
+*.tmp
 *.bak
-yarn.lock
-*.local
-*.dev
-test.ts
