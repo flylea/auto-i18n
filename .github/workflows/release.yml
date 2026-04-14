@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,12 +21,68 @@ jobs:
         with:
           go-version: "1.21"
 
-      - name: Build
-        run: go build -o dist/auto-i18n ./cmd/auto-i18n
+      - name: Build for Windows
+        run: go build -o dist/auto-i18n-win-x64 ./cmd/auto-i18n
+
+      - name: Build for Linux
+        run: GOOS=linux GOARCH=amd64 go build -o dist/auto-i18n-linux-x64 ./cmd/auto-i18n
+
+      - name: Build for macOS
+        run: GOOS=darwin GOARCH=amd64 go build -o dist/auto-i18n-darwin-x64 ./cmd/auto-i18n
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: |
+            dist/auto-i18n-win-x64
+            dist/auto-i18n-linux-x64
+            dist/auto-i18n-darwin-x64
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/auto-i18n
+          files: |
+            dist/auto-i18n-win-x64
+            dist/auto-i18n-linux-x64
+            dist/auto-i18n-darwin-x64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-npm:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: bin/
+
+      - name: Make binaries executable
+        run: |
+          chmod +x bin/auto-i18n-linux-x64
+          chmod +x bin/auto-i18n-darwin-x64
+          mv bin/auto-i18n-linux-x64 bin/auto-i18n
+          mv bin/auto-i18n-darwin-x64 bin/auto-i18n-darwin
+      - name: Update bin field for Windows
+        run: |
+          # Windows binary already has .exe
+          mv bin/auto-i18n-win-x64 bin/auto-i18n.exe
+
+      - name: Update package.json version
+        run: node -e "const p=require('./package.json'); p.version='${GITHUB_REF#refs/tags/v}'; p.bin['auto-i18n']='./bin/auto-i18n.exe'; require('fs').writeFileSync('./package.json', JSON.stringify(p, null, 2))"
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
