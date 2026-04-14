@@ -66,7 +66,7 @@ func runScan() error {
 	}
 
 	if dryRun {
-		fmt.Println("🔍 Dry run mode - no files will be written\n")
+		fmt.Println("Dry run mode - no files will be written")
 	}
 
 	extractor := scanner.New(cfg, scanAll)
@@ -83,10 +83,11 @@ func runScan() error {
 	fmt.Printf("Found %d translation keys\n", len(allKeys))
 
 	trans := translator.New(cfg)
-	results, err := trans.Translate(allKeys)
+	results, fromCache, translated, err := trans.Translate(allKeys)
 	if err != nil {
 		return fmt.Errorf("translation failed: %w", err)
 	}
+	fmt.Printf("Translation: %d from cache, %d via API\n", fromCache, translated)
 
 	if merge {
 		results = writer.MergeResults(cfg, results)

@@ -1,12 +1,7 @@
 package translator
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -15,130 +10,195 @@ import (
 	"github.com/flylea/auto-i18n/internal/types"
 )
 
+// Translator orchestrates translation using a provider and optional cache
 type Translator struct {
-	cfg    *config.Config
-	apiKey string
-	apiURL string
-	client *http.Client
+	cfg      *config.Config
+	provider Provider
+	cache    *Cache
 }
 
+// New creates a new Translator with configured provider and cache
 func New(cfg *config.Config) *Translator {
-	apiKey := os.Getenv("DEEPSEEK_API_KEY")
-	apiURL := os.Getenv("DEEPSEEK_API_URL")
-	if apiURL == "" {
-		apiURL = "https://api.deepseek.com"
+	apiKey, apiURL, model := GetEnvConfig()
+
+	// Create provider based on API URL or default to Deepseek
+	var provider Provider
+	if strings.Contains(apiURL, "openai") || strings.Contains(apiURL, "api.openai") {
+		provider = NewOpenAIProvider(apiKey, apiURL, model, cfg.BatchSize)
+	} else {
+		provider = NewDeepseekProvider(apiKey, apiURL, model, cfg.BatchSize)
+	}
+
+	// Create cache if output dir is configured
+	var cache *Cache
+	if cfg.OutputDir != "" {
+		cache, _ = NewCache(cfg)
 	}
 
 	return &Translator{
-		cfg:    cfg,
-		apiKey: apiKey,
-		apiURL: apiURL,
-		client: &http.Client{Timeout: 120 * time.Second},
+		cfg:      cfg,
+		provider: provider,
+		cache:    cache,
 	}
 }
 
-func (t *Translator) Translate(keys []string) (types.TranslateResult, error) {
+// Translate translates keys to all configured languages
+// Returns results and cache statistics
+func (t *Translator) Translate(keys []string) (types.TranslateResult, int, int, error) {
 	results := make(types.TranslateResult)
+	fromCache := 0
+	translated := 0
 
-	// 并发控制：同时翻译多个 key
+	// Pre-load all cached translations
+	cachedTranslations := make(map[string]map[string]string) // lang -> key -> translation
+	for _, lang := range t.cfg.Languages {
+		if t.cache != nil {
+			cachedTranslations[lang] = t.cache.GetMulti(keys, lang, t.provider.Name())
+			fromCache += len(cachedTranslations[lang])
+		} else {
+			cachedTranslations[lang] = make(map[string]string)
+		}
+	}
+
+	// Determine which keys need translation
+	var keysToTranslate []string
+	for _, key := range keys {
+		needsTranslation := false
+		for _, lang := range t.cfg.Languages {
+			if _, ok := cachedTranslations[lang][key]; !ok {
+				needsTranslation = true
+				break
+			}
+		}
+		if needsTranslation {
+			keysToTranslate = append(keysToTranslate, key)
+		}
+	}
+
+	// Translate missing keys concurrently per language
 	concurrency := 3
 	sem := make(chan struct{}, concurrency)
-
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for _, key := range keys {
+	for _, lang := range t.cfg.Languages {
+		// Filter keys that need this language
+		var langKeys []string
+		for _, key := range keysToTranslate {
+			if _, ok := cachedTranslations[lang][key]; !ok {
+				langKeys = append(langKeys, key)
+			}
+		}
+
+		if len(langKeys) == 0 {
+			// All keys cached for this language
+			continue
+		}
+
 		wg.Add(1)
-		go func(k string) {
+		go func(targetLang string, neededKeys []string) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			translations := make(map[string]string)
-			for _, lang := range t.cfg.Languages {
-				trans, err := t.translateKey(k, lang)
-				if err != nil {
-					fmt.Printf("Warning: failed to translate %s to %s: %v\n", k, lang, err)
-					trans = k // 回退到 key 本身
-				} else {
-					fmt.Printf("Translated %q to %s: %s\n", k, lang, trans)
+			translations, err := t.provider.TranslateBatch(neededKeys, targetLang)
+			if err != nil {
+				fmt.Printf("Warning: failed to translate to %s: %v\n", targetLang, err)
+				// Fallback: use key as translation
+				translations = make(map[string]string)
+				for _, k := range neededKeys {
+					translations[k] = k
 				}
-				translations[lang] = trans
+			}
 
-				// API 限流保护：避免请求过于密集
-				time.Sleep(100 * time.Millisecond)
+			// Validate placeholders and update cache
+			for _, key := range neededKeys {
+				if trans, ok := translations[key]; ok {
+					// Validate placeholders
+					if ok, missing := ValidatePlaceholders(key, trans); !ok && len(missing) > 0 {
+						fmt.Printf("Warning: placeholder mismatch for key %q: missing %v\n", key, missing)
+					}
+
+					// Update cache
+					if t.cache != nil {
+						t.cache.Set(key, targetLang, t.provider.Name(), trans)
+					}
+
+					mu.Lock()
+					translated++
+					mu.Unlock()
+				}
 			}
 
 			mu.Lock()
-			results[k] = translations
+			for key, trans := range translations {
+				if results[key] == nil {
+					results[key] = make(map[string]string)
+				}
+				results[key][targetLang] = trans
+			}
 			mu.Unlock()
-		}(key)
+
+			// Rate limiting
+			time.Sleep(100 * time.Millisecond)
+		}(lang, langKeys)
 	}
 
 	wg.Wait()
-	return results, nil
+
+	// Add cached translations to results
+	for lang, keyMap := range cachedTranslations {
+		for key, trans := range keyMap {
+			if results[key] == nil {
+				results[key] = make(map[string]string)
+			}
+			if results[key][lang] == "" {
+				results[key][lang] = trans
+			}
+		}
+	}
+
+	// Fill in missing translations with key itself
+	for _, key := range keys {
+		if results[key] == nil {
+			results[key] = make(map[string]string)
+		}
+		for _, lang := range t.cfg.Languages {
+			if results[key][lang] == "" {
+				results[key][lang] = key
+			}
+		}
+	}
+
+	// Save cache periodically
+	if t.cache != nil && translated > 0 {
+		t.cache.Save()
+	}
+
+	return results, fromCache, translated, nil
 }
 
-// translateKey 单个 key 的翻译
-func (t *Translator) translateKey(key, targetLang string) (string, error) {
-	systemPrompt := `You are an i18n translation assistant.
-- Output ONLY the translated string, no explanation, no markdown.
-- If key contains ".", it indicates a nested path, translate only the last part.
-Example: key "user.avatar" -> translate "avatar"
-Rules:
-1. Output must be a string.
-2. Only return the target language content.`
+// TranslateWithCache is an alias for Translate that returns cache stats
+func (t *Translator) TranslateWithCache(keys []string) (types.TranslateResult, error) {
+	results, _, _, err := t.Translate(keys)
+	return results, err
+}
 
-	payload := map[string]interface{}{
-		"model": "deepseek-chat",
-		"messages": []map[string]string{
-			{"role": "system", "content": systemPrompt},
-			{"role": "user", "content": fmt.Sprintf(`Translate key: "%s", target language: %s`, key, targetLang)},
-		},
-		"temperature": 0,
+// InvalidateCache removes specific keys from cache
+func (t *Translator) InvalidateCache(keys []string, lang string) {
+	if t.cache != nil {
+		t.cache.Invalidate(keys, lang, t.provider.Name())
 	}
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
+// ClearCache clears all cached translations
+func (t *Translator) ClearCache() {
+	if t.cache != nil {
+		t.cache.Clear()
 	}
+}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", t.apiURL+"/chat/completions", bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+t.apiKey)
-
-	resp, err := t.client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("API error: status %d", resp.StatusCode)
-	}
-
-	var result struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
-	}
-
-	if len(result.Choices) == 0 {
-		return "", fmt.Errorf("empty response")
-	}
-
-	return strings.TrimSpace(result.Choices[0].Message.Content), nil
+// ProviderName returns the name of the current provider
+func (t *Translator) ProviderName() string {
+	return t.provider.Name()
 }

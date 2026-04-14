@@ -14,6 +14,9 @@ vendor/
 playground/src/i18n/
 playground/.env
 
+# Translation cache
+.i18n-cache.json
+
 # Misc
 *.log
 .DS_Store
