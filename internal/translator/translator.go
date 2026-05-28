@@ -2,7 +2,6 @@ package translator
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,20 +18,19 @@ type Translator struct {
 
 // New creates a new Translator with configured provider and cache
 func New(cfg *config.Config) *Translator {
-	apiKey, apiURL, model := GetEnvConfig()
+	apiKey, model := GetEnvConfig()
 
-	// Create provider based on API URL or default to Deepseek
-	var provider Provider
-	if strings.Contains(apiURL, "openai") || strings.Contains(apiURL, "api.openai") {
-		provider = NewOpenAIProvider(apiKey, apiURL, model, cfg.BatchSize)
-	} else {
-		provider = NewDeepseekProvider(apiKey, apiURL, model, cfg.BatchSize)
-	}
+	// Default to Deepseek provider
+	provider := NewDeepseekProvider(apiKey, model, cfg.BatchSize)
 
 	// Create cache if output dir is configured
 	var cache *Cache
 	if cfg.OutputDir != "" {
-		cache, _ = NewCache(cfg)
+		var err error
+		cache, err = NewCache(cfg)
+		if err != nil {
+			fmt.Printf("Warning: failed to create cache: %v\n", err)
+		}
 	}
 
 	return &Translator{
@@ -45,12 +43,18 @@ func New(cfg *config.Config) *Translator {
 // Translate translates keys to all configured languages
 // Returns results and cache statistics
 func (t *Translator) Translate(keys []string) (types.TranslateResult, int, int, error) {
-	results := make(types.TranslateResult)
+	if len(keys) == 0 {
+		return make(types.TranslateResult), 0, 0, nil
+	}
+
+	results := make(types.TranslateResult, len(keys))
 	fromCache := 0
 	translated := 0
 
-	// Pre-load all cached translations
-	cachedTranslations := make(map[string]map[string]string) // lang -> key -> translation
+	// Pre-load cached translations and determine per-language missing keys in one pass
+	langKeysToTranslate := make(map[string][]string) // lang -> keys needing translation
+	cachedTranslations := make(map[string]map[string]string)
+
 	for _, lang := range t.cfg.Languages {
 		if t.cache != nil {
 			cachedTranslations[lang] = t.cache.GetMulti(keys, lang, t.provider.Name())
@@ -58,21 +62,28 @@ func (t *Translator) Translate(keys []string) (types.TranslateResult, int, int, 
 		} else {
 			cachedTranslations[lang] = make(map[string]string)
 		}
-	}
 
-	// Determine which keys need translation
-	var keysToTranslate []string
-	for _, key := range keys {
-		needsTranslation := false
-		for _, lang := range t.cfg.Languages {
+		// Build missing keys for this language while we have the cache map
+		var missing []string
+		for _, key := range keys {
 			if _, ok := cachedTranslations[lang][key]; !ok {
-				needsTranslation = true
-				break
+				missing = append(missing, key)
 			}
 		}
-		if needsTranslation {
-			keysToTranslate = append(keysToTranslate, key)
+		if len(missing) > 0 {
+			langKeysToTranslate[lang] = missing
 		}
+	}
+
+	// If all keys are cached, just build results from cache
+	if len(langKeysToTranslate) == 0 {
+		for _, key := range keys {
+			results[key] = make(map[string]string)
+			for _, lang := range t.cfg.Languages {
+				results[key][lang] = cachedTranslations[lang][key]
+			}
+		}
+		return results, fromCache, 0, nil
 	}
 
 	// Translate missing keys concurrently per language
@@ -81,20 +92,7 @@ func (t *Translator) Translate(keys []string) (types.TranslateResult, int, int, 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for _, lang := range t.cfg.Languages {
-		// Filter keys that need this language
-		var langKeys []string
-		for _, key := range keysToTranslate {
-			if _, ok := cachedTranslations[lang][key]; !ok {
-				langKeys = append(langKeys, key)
-			}
-		}
-
-		if len(langKeys) == 0 {
-			// All keys cached for this language
-			continue
-		}
-
+	for lang, neededKeys := range langKeysToTranslate {
 		wg.Add(1)
 		go func(targetLang string, neededKeys []string) {
 			defer wg.Done()
@@ -114,39 +112,33 @@ func (t *Translator) Translate(keys []string) (types.TranslateResult, int, int, 
 			// Validate placeholders and update cache
 			for _, key := range neededKeys {
 				if trans, ok := translations[key]; ok {
-					// Validate placeholders
-					if ok, missing := ValidatePlaceholders(key, trans); !ok && len(missing) > 0 {
+					if valid, missing := ValidatePlaceholders(key, trans); !valid && len(missing) > 0 {
 						fmt.Printf("Warning: placeholder mismatch for key %q: missing %v\n", key, missing)
 					}
 
-					// Update cache
 					if t.cache != nil {
 						t.cache.Set(key, targetLang, t.provider.Name(), trans)
 					}
 
 					mu.Lock()
+					// Store translation directly in results
+					if results[key] == nil {
+						results[key] = make(map[string]string)
+					}
+					results[key][targetLang] = trans
 					translated++
 					mu.Unlock()
 				}
 			}
 
-			mu.Lock()
-			for key, trans := range translations {
-				if results[key] == nil {
-					results[key] = make(map[string]string)
-				}
-				results[key][targetLang] = trans
-			}
-			mu.Unlock()
-
 			// Rate limiting
 			time.Sleep(100 * time.Millisecond)
-		}(lang, langKeys)
+		}(lang, neededKeys)
 	}
 
 	wg.Wait()
 
-	// Add cached translations to results
+	// Add cached translations for keys not yet in results
 	for lang, keyMap := range cachedTranslations {
 		for key, trans := range keyMap {
 			if results[key] == nil {
@@ -170,9 +162,9 @@ func (t *Translator) Translate(keys []string) (types.TranslateResult, int, int, 
 		}
 	}
 
-	// Save cache periodically
+	// Save cache if new translations were added
 	if t.cache != nil && translated > 0 {
-		t.cache.Save()
+		_ = t.cache.Save()
 	}
 
 	return results, fromCache, translated, nil

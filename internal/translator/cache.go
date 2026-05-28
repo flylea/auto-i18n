@@ -1,8 +1,6 @@
 package translator
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -45,11 +43,9 @@ func NewCache(cfg *config.Config) (*Cache, error) {
 	return c, nil
 }
 
-// cacheKey generates a unique key for (key, lang) pair
-func (c *Cache) cacheKey(key, lang, model string) string {
-	data := fmt.Sprintf("%s|%s|%s", key, lang, model)
-	hash := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(hash[:16])
+// cacheKey generates a unique key for (key, lang, model) pair
+func cacheKey(key, lang, model string) string {
+	return key + "|" + lang + "|" + model
 }
 
 // Get retrieves a cached translation
@@ -57,7 +53,7 @@ func (c *Cache) Get(key, lang, model string) (string, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	entry, ok := c.entries[c.cacheKey(key, lang, model)]
+	entry, ok := c.entries[cacheKey(key, lang, model)]
 	if !ok {
 		return "", false
 	}
@@ -72,7 +68,7 @@ func (c *Cache) Set(key, lang, model, translation string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.entries[c.cacheKey(key, lang, model)] = cacheEntry{
+	c.entries[cacheKey(key, lang, model)] = cacheEntry{
 		Translation: translation,
 		Lang:       lang,
 		Model:      model,
@@ -114,7 +110,7 @@ func (c *Cache) Invalidate(keys []string, lang, model string) {
 	defer c.mu.Unlock()
 
 	for _, key := range keys {
-		delete(c.entries, c.cacheKey(key, lang, model))
+		delete(c.entries, cacheKey(key, lang, model))
 	}
 }
 
