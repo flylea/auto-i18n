@@ -20,10 +20,7 @@ type DeepseekProvider struct {
 	batchSize int
 }
 
-func NewDeepseekProvider(apiKey, apiURL, model string, batchSize int) *DeepseekProvider {
-	if apiURL == "" {
-		apiURL = "https://api.deepseek.com"
-	}
+func NewDeepseekProvider(apiKey, model string, batchSize int) *DeepseekProvider {
 	if model == "" {
 		model = "deepseek-chat"
 	}
@@ -33,7 +30,7 @@ func NewDeepseekProvider(apiKey, apiURL, model string, batchSize int) *DeepseekP
 
 	return &DeepseekProvider{
 		apiKey:    apiKey,
-		apiURL:    apiURL,
+		apiURL:    "https://api.deepseek.com",
 		model:     model,
 		client:    &http.Client{Timeout: 120 * time.Second},
 		batchSize: batchSize,
@@ -254,12 +251,14 @@ type OpenAIProvider struct {
 	*DeepseekProvider // Reuse Deepseek implementation
 }
 
-func NewOpenAIProvider(apiKey, apiURL, model string, batchSize int) *OpenAIProvider {
+func NewOpenAIProvider(apiKey, model string, batchSize int) *OpenAIProvider {
 	if model == "" {
 		model = "gpt-3.5-turbo"
 	}
+	p := NewDeepseekProvider(apiKey, model, batchSize)
+	p.apiURL = "https://api.openai.com"
 	return &OpenAIProvider{
-		DeepseekProvider: NewDeepseekProvider(apiKey, apiURL, model, batchSize),
+		DeepseekProvider: p,
 	}
 }
 
@@ -268,17 +267,13 @@ func (o *OpenAIProvider) Name() string {
 }
 
 // GetEnvConfig returns API config from environment variables
-func GetEnvConfig() (apiKey, apiURL, model string) {
+func GetEnvConfig() (apiKey, model string) {
 	apiKey = os.Getenv("DEEPSEEK_API_KEY")
-	apiURL = os.Getenv("DEEPSEEK_API_URL")
 	model = os.Getenv("DEEPSEEK_MODEL")
 
 	// Also check generic OpenAI env
 	if apiKey == "" {
 		apiKey = os.Getenv("OPENAI_API_KEY")
-	}
-	if apiURL == "" {
-		apiURL = os.Getenv("OPENAI_API_URL")
 	}
 	if model == "" {
 		model = os.Getenv("OPENAI_MODEL")

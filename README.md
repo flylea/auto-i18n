@@ -47,7 +47,6 @@ Create `i18n.config.json` in your project root:
 
 ```bash
 DEEPSEEK_API_KEY=your-api-key
-DEEPSEEK_API_URL=https://api.deepseek.com
 ```
 
 ## Commands
